@@ -1,0 +1,28 @@
+# libraries
+node_modules/
+jspm_packages/
+
+# logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# enviroment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# os
+.DS_Store
+Thumbs.db
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
