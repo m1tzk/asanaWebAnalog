@@ -1,0 +1,61 @@
+<%- include('partials/header') %>
+
+<div class="form-card">
+  <h2 style="margin-bottom: 20px;">Постановка новой задачи</h2>
+
+  <% if (error) { %>
+    <div class="alert alert-danger"><%= error %></div>
+  <% } %>
+
+  <form action="/add<%= currentUser.isAuthenticated ? '?auth=1' : '' %>" method="POST">
+    <div class="form-group">
+      <label for="title">Название задачи *</label>
+      <input type="text" id="title" name="title" class="form-control" placeholder="Например: Настроить SSL-сертификаты" required>
+    </div>
+
+    <div class="form-group">
+      <label for="description">Описание / Техническое задание</label>
+      <textarea id="description" name="description" class="form-control" rows="4" placeholder="Подробности задачи..."></textarea>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+      <div class="form-group">
+        <label for="assignee">Исполнитель *</label>
+        <input type="text" id="assignee" name="assignee" class="form-control" placeholder="Имя Фамилия" required>
+      </div>
+
+      <div class="form-group">
+        <label for="estimatedHours">Оценка времени (в часах)</label>
+        <input type="number" id="estimatedHours" name="estimatedHours" class="form-control" value="4" min="1">
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+      <div class="form-group">
+        <label for="status">Статус</label>
+        <select id="status" name="status" class="form-control">
+          <option value="backlog">Бэклог (Backlog)</option>
+          <option value="in_progress">В работе (In Progress)</option>
+          <option value="done">Завершено (Done)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="priority">Приоритет</label>
+        <select id="priority" name="priority" class="form-control">
+          <option value="low">Низкий (Low)</option>
+          <option value="medium" selected>Средний (Medium)</option>
+          <option value="high">Высокий (High)</option>
+          <option value="urgent">Срочный (Urgent)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-top: 20px; display: flex; gap: 10px;">
+      <button type="submit" class="btn" style="flex: 1;">Создать задачу</button>
+      <a href="/<%= currentUser.isAuthenticated ? '?auth=1' : '' %>" class="btn btn-secondary">Отмена</a>
+    </div>
+  </form>
+</div>
+
+<%- include('partials/footer') %>

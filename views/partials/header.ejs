@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %> | Asana Manager</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="navbar">
+    <div class="container nav-wrapper">
+      <a href="/<%= currentUser.isAuthenticated ? '?auth=1' : '' %>" class="logo">
+        📌 <span>AsanaTeam</span>
+      </a>
+      <nav class="nav-links">
+        <a href="/<%= currentUser.isAuthenticated ? '?auth=1' : '' %>">Задачи</a>
+        <a href="/add<%= currentUser.isAuthenticated ? '?auth=1' : '' %>">+ Новая задача</a>
+        
+        <% if (currentUser.isAuthenticated) { %>
+          <span class="user-badge">👤 <%= currentUser.name %> (<%= currentUser.role %>)</span>
+          <a href="/" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.8rem;">Выйти</a>
+        <% } else { %>
+          <span class="user-badge" style="background:#f1f5f9; color:#64748b;">👤 Гость</span>
+          <a href="/?auth=1" class="btn" style="padding: 4px 10px; font-size: 0.8rem;">Войти как Team Lead</a>
+        <% } %>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div class="container">

@@ -1,0 +1,40 @@
+<%- include('partials/header') %>
+
+<div style="max-width: 700px; margin: 0 auto;">
+  <a href="/<%= currentUser.isAuthenticated ? '?auth=1' : '' %>" class="btn btn-secondary" style="margin-bottom: 20px;">&larr; Назад к списку</a>
+
+  <div class="form-card">
+    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+      <span class="badge badge-<%= task.status %>"><%= task.status %></span>
+      <span class="badge badge-priority-<%= task.priority %>"><%= task.priority %> priority</span>
+    </div>
+
+    <h1 style="font-size: 1.6rem; margin-bottom: 15px;"><%= task.title %></h1>
+    
+    <div style="background: #f8fafc; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 4px solid var(--primary);">
+      <h4 style="margin-bottom: 5px; color: var(--text-muted);">Описание:</h4>
+      <p><%= task.description || 'Подробное техническое задание отсутствует.' %></p>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; border-top: 1px solid var(--border); padding-top: 15px;">
+      <div>
+        <strong style="color: var(--text-muted); font-size: 0.85rem;">ОТВЕТСТВЕННЫЙ:</strong>
+        <p style="font-size: 1.05rem; font-weight: 600; margin-top: 4px;">👤 <%= task.assignee %></p>
+      </div>
+      <div>
+        <strong style="color: var(--text-muted); font-size: 0.85rem;">ОЦЕНКА ТРУДОЗАТРАТ:</strong>
+        <p style="font-size: 1.05rem; font-weight: 600; margin-top: 4px;">⏱ <%= task.estimatedHours %> рабочих часов</p>
+      </div>
+      <div>
+        <strong style="color: var(--text-muted); font-size: 0.85rem;">ДАТА СОЗДАНИЯ:</strong>
+        <p style="margin-top: 4px;">📅 <%= task.createdAt %></p>
+      </div>
+      <div>
+        <strong style="color: var(--text-muted); font-size: 0.85rem;">ID ЗАДАЧИ:</strong>
+        <p style="margin-top: 4px;">#<%= task.id %></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

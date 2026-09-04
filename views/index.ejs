@@ -1,0 +1,51 @@
+<%- include('partials/header') %>
+
+<% if (needAuthWarning) { %>
+  <div class="alert alert-warning">
+    ⚠️ <strong>Ограничение доступа:</strong> Создание задач доступно только авторизованным Team Lead. Нажмите «Войти как Team Lead» в правом верхнем углу.
+  </div>
+<% } %>
+
+<div class="page-header">
+  <div>
+    <h2>Канбан-доска проектов</h2>
+    <p style="color: var(--text-muted);">Всего задач в спринте: <%= tasks.length %></p>
+  </div>
+  <a href="/add<%= currentUser.isAuthenticated ? '?auth=1' : '' %>" class="btn">+ Добавить задачу</a>
+</div>
+
+<div class="filter-bar">
+  <a href="/<%= currentUser.isAuthenticated ? '?auth=1' : '' %>" class="filter-chip <%= selectedStatus === 'all' ? 'active' : '' %>">Все</a>
+  <a href="/?status=backlog<%= currentUser.isAuthenticated ? '&auth=1' : '' %>" class="filter-chip <%= selectedStatus === 'backlog' ? 'active' : '' %>">Бэклог</a>
+  <a href="/?status=in_progress<%= currentUser.isAuthenticated ? '&auth=1' : '' %>" class="filter-chip <%= selectedStatus === 'in_progress' ? 'active' : '' %>">В работе</a>
+  <a href="/?status=done<%= currentUser.isAuthenticated ? '&auth=1' : '' %>" class="filter-chip <%= selectedStatus === 'done' ? 'active' : '' %>">Завершенные</a>
+</div>
+
+<% if (tasks.length === 0) { %>
+  <div style="text-align: center; padding: 40px; background: white; border-radius: 8px;">
+    <h3>Задач с таким статусом не найдено</h3>
+    <p style="color: var(--text-muted); margin-top: 8px;">Попробуйте выбрать другой фильтр или добавьте новую задачу.</p>
+  </div>
+<% } else { %>
+  <div class="task-grid">
+    <% tasks.forEach(task => { %>
+      <div class="task-card">
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+            <span class="badge badge-<%= task.status %>"><%= task.status %></span>
+            <span class="badge badge-priority-<%= task.priority %>"><%= task.priority %></span>
+          </div>
+          <h3><a href="/item/<%= task.id %><%= currentUser.isAuthenticated ? '?auth=1' : '' %>" style="text-decoration: none; color: inherit;"><%= task.title %></a></h3>
+          <p><%= task.description || 'Описание отсутствует' %></p>
+        </div>
+
+        <div class="task-meta">
+          <span>👤 <%= task.assignee %></span>
+          <span>⏱ <%= task.estimatedHours %> ч.</span>
+        </div>
+      </div>
+    <% }) %>
+  </div>
+<% } %>
+
+<%- include('partials/footer') %>

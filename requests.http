@@ -1,0 +1,102 @@
+@baseUrl = http://localhost:3000/api/tasks
+@contentType = application/json
+
+
+### 1.1 Получить список всех задач
+GET {{baseUrl}}
+
+###
+
+### 1.2 Фильтрация: получить задачи только со статусом "in_progress"
+GET {{baseUrl}}?status=in_progress
+
+###
+
+### 1.3 Поиск задач по ключевому слову (например, "базы данных")
+GET {{baseUrl}}?search=базы%20данных
+
+###
+
+### 1.4 Получить конкретную задачу по существующему ID (ID = 1)
+GET {{baseUrl}}/1
+
+###
+
+### 1.5 Проверка ошибки 404: попытка получить несуществующую задачу (ID = 999)
+GET {{baseUrl}}/999
+
+###
+
+### 1.6 Проверка ошибки 400: передача некорректного ID (не число)
+GET {{baseUrl}}/abc
+
+
+### 2.1 Успешное создание новой задачи (Ожидается статус 201 Created)
+POST {{baseUrl}}
+Content-Type: {{contentType}}
+
+{
+  "title": "Настроить CI/CD пайплайн",
+  "description": "Автоматизировать тестирование и сборку бэкенда при push в main",
+  "status": "backlog",
+  "priority": "high",
+  "assignee": "Сергей Васильев",
+  "estimatedHours": 6
+}
+
+###
+
+### 2.2 Проверка ошибки 400 (POST): создание задачи БЕЗ обязательного заголовка (title)
+POST {{baseUrl}}
+Content-Type: {{contentType}}
+
+{
+  "description": "Описание без названия",
+  "assignee": "Иван Иванов"
+}
+
+###
+
+### 2.3 Проверка ошибки 400 (POST): передача недопустимого статуса
+POST {{baseUrl}}
+Content-Type: {{contentType}}
+
+{
+  "title": "Задача с кривым статусом",
+  "status": "wrong_status_xyz",
+  "assignee": "Иван Иванов"
+}
+
+### 3.1 Полное обновление задачи (PUT: перезаписывает все поля у задачи с ID = 1)
+PUT {{baseUrl}}/1
+Content-Type: {{contentType}}
+
+{
+  "title": "Разработать архитектуру БД и написать миграции",
+  "description": "Схема спроектирована и добавлены скрипты PostgreSQL",
+  "status": "done",
+  "priority": "urgent",
+  "assignee": "Алексей Смирнов",
+  "estimatedHours": 10
+}
+
+###
+
+### 3.2 Частичное обновление задачи (PATCH: смена только статуса на 'in_progress' у задачи ID = 3)
+PATCH {{baseUrl}}/3
+Content-Type: {{contentType}}
+
+{
+  "status": "in_progress"
+}
+
+### 4.1 Удаление существующей задачи (ID = 2)
+DELETE {{baseUrl}}/2
+
+###
+
+### 4.2 Повторная попытка удаления той же задачи (Ожидается 404 Not Found)
+DELETE {{baseUrl}}/2
+
+### 5.1 Запрос на маршрут, которого нет на сервере (Fallback 404)
+GET http://localhost:3000/api/unknown-endpoint

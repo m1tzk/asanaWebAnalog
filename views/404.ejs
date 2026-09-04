@@ -1,0 +1,10 @@
+<%- include('partials/header') %>
+
+<div style="text-align: center; padding: 60px 20px;">
+  <h1 style="font-size: 5rem; color: var(--primary); margin-bottom: 10px;">404</h1>
+  <h2>Страница не найдена</h2>
+  <p style="color: var(--text-muted); margin: 15px 0 25px;">Запрошенный адрес <code><%= url %></code> не существует на сервере задач.</p>
+  <a href="/<%= currentUser.isAuthenticated ? '?auth=1' : '' %>" class="btn">Вернуться на главную доску</a>
+</div>
+
+<%- include('partials/footer') %>
