@@ -1,350 +1,278 @@
+require('dotenv').config(); 
 const express = require('express');
+const { Op } = require('sequelize'); 
+const { sequelize, Task } = require('./models'); 
 
-// init
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// sys middlew
+
 app.use(express.json());
 
-// logger middlew
+// log
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] ${req.method} ${req.originalUrl}`);
   next();
 });
 
-// данные 
-let tasks = [
-  {
-    id: 1,
-    title: 'Разработать архитектуру базы данных',
-    description: 'Спроектировать реляционную модель для пользователей, проектов и спринтов.',
-    status: 'done',
-    priority: 'high',
-    assignee: 'Алексей Смирнов',
-    estimatedHours: 8,
-    createdAt: '2025-02-01T10:00:00.000Z',
-    updatedAt: '2025-02-02T14:30:00.000Z'
-  },
-  {
-    id: 2,
-    title: 'Создать эндпоинты аутентификации JWT',
-    description: 'Реализовать регистрацию, логин и генерацию Access/Refresh токенов.',
-    status: 'in_progress',
-    priority: 'urgent',
-    assignee: 'Мария Иванова',
-    estimatedHours: 12,
-    createdAt: '2025-02-03T09:15:00.000Z',
-    updatedAt: '2025-02-03T09:15:00.000Z'
-  },
-  {
-    id: 3,
-    title: 'Верстка канбан-доски в клиентском приложении',
-    description: 'Реализовать Drag-and-Drop карточек с задачами между колонками статусов.',
-    status: 'backlog',
-    priority: 'medium',
-    assignee: 'Дмитрий Кузнецов',
-    estimatedHours: 16,
-    createdAt: '2025-02-04T11:00:00.000Z',
-    updatedAt: '2025-02-04T11:00:00.000Z'
-  }
-];
-
-let nextId = 4;
-
+// enums
 const ALLOWED_STATUSES = ['backlog', 'in_progress', 'review', 'done'];
 const ALLOWED_PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 
 
-// маршрутизация (crud endpoints)
 /**
  * @route   GET /api/tasks
- * @desc    Получение списка задач с возможностью фильтрации по query-параметрам
+ * @desc    Получение списка задач с фильтрацией и поиском из PostgreSQL
  * @query   status, priority, assignee, search
  */
-app.get('/api/tasks', (req, res) => {
-  let result = [...tasks];
-  const { status, priority, assignee, search } = req.query;
+app.get('/api/tasks', async (req, res, next) => {
+  try {
+    const { status, priority, assignee, search } = req.query;
+    const whereConditions = {};
 
-  if (status) {
-    result = result.filter(t => t.status.toLowerCase() === status.toLowerCase());
+    if (status) {
+      whereConditions.status = status.toLowerCase();
+    }
+
+    if (priority) {
+      whereConditions.priority = priority.toLowerCase();
+    }
+
+    if (assignee) {
+      whereConditions.assignee = { [Op.iLike]: `%${assignee}%` };
+    }
+
+    if (search) {
+      whereConditions[Op.or] = [
+        { title: { [Op.iLike]: `%${search}%` } },
+        { description: { [Op.iLike]: `%${search}%` } }
+      ];
+    }
+
+    const tasks = await Task.findAll({
+      where: whereConditions,
+      order: [['createdAt', 'DESC']]
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: tasks.length,
+      data: tasks
+    });
+  } catch (error) {
+    next(error);
   }
-
-  if (priority) {
-    result = result.filter(t => t.priority.toLowerCase() === priority.toLowerCase());
-  }
-
-  if (assignee) {
-    result = result.filter(t => t.assignee.toLowerCase().includes(assignee.toLowerCase()));
-  }
-
-  if (search) {
-    const q = search.toLowerCase();
-    result = result.filter(t => 
-      t.title.toLowerCase().includes(q) || 
-      (t.description && t.description.toLowerCase().includes(q))
-    );
-  }
-
-  return res.status(200).json({
-    success: true,
-    count: result.length,
-    data: result
-  });
 });
 
 /**
  * @route   GET /api/tasks/:id
- * @desc    Получение одной конкретной задачи по её уникальному идентификатору
+ * @desc    Получение одной задачи по первичному ключу (Primary Key)
  */
-app.get('/api/tasks/:id', (req, res) => {
-  const taskId = parseInt(req.params.id, 10);
+app.get('/api/tasks/:id', async (req, res, next) => {
+  try {
+    const taskId = parseInt(req.params.id, 10);
 
-  if (isNaN(taskId)) {
-    return res.status(400).json({
-      success: false,
-      error: 'Некорректный формат ID. Идентификатор должен быть целым числом.'
+    if (isNaN(taskId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Идентификатор задачи должен быть целым числом.'
+      });
+    }
+
+    const task = await Task.findByPk(taskId);
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        error: `Задача с ID ${taskId} не найдена в базе данных.`
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: task
     });
+  } catch (error) {
+    next(error);
   }
-
-  const task = tasks.find(t => t.id === taskId);
-
-  if (!task) {
-    return res.status(404).json({
-      success: false,
-      error: `Задача с ID ${taskId} не найдена в системе.`
-    });
-  }
-
-  return res.status(200).json({
-    success: true,
-    data: task
-  });
 });
 
 /**
  * @route   POST /api/tasks
- * @desc    Создание новой задачи
+ * @desc    Создание новой задачи в PostgreSQL
  */
-app.post('/api/tasks', (req, res) => {
-  const { title, description, status, priority, assignee, estimatedHours } = req.body;
+app.post('/api/tasks', async (req, res, next) => {
+  try {
+    const { title, description, status, priority, assignee, estimatedHours } = req.body;
 
-  if (!title || typeof title !== 'string' || title.trim() === '') {
-    return res.status(400).json({
-      success: false,
-      error: 'Поле "title" обязательно для заполнения и должно быть непустой строкой.'
+    if (!title || typeof title !== 'string' || title.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'Поле "title" обязательно для заполнения и не может быть пустым.'
+      });
+    }
+
+    if (!assignee || typeof assignee !== 'string' || assignee.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'Поле "assignee" (ответственный) обязательно для заполнения.'
+      });
+    }
+
+    const taskStatus = status || 'backlog';
+    if (!ALLOWED_STATUSES.includes(taskStatus)) {
+      return res.status(400).json({
+        success: false,
+        error: `Недопустимый статус "${taskStatus}". Разрешено: ${ALLOWED_STATUSES.join(', ')}.`
+      });
+    }
+
+    const taskPriority = priority || 'medium';
+    if (!ALLOWED_PRIORITIES.includes(taskPriority)) {
+      return res.status(400).json({
+        success: false,
+        error: `Недопустимый приоритет "${taskPriority}". Разрешено: ${ALLOWED_PRIORITIES.join(', ')}.`
+      });
+    }
+
+    const newTask = await Task.create({
+      title: title.trim(),
+      description: description ? description.trim() : null,
+      status: taskStatus,
+      priority: taskPriority,
+      assignee: assignee.trim(),
+      estimatedHours: Number(estimatedHours) >= 0 ? Number(estimatedHours) : 0
     });
-  }
 
-  if (!assignee || typeof assignee !== 'string' || assignee.trim() === '') {
-    return res.status(400).json({
-      success: false,
-      error: 'Поле "assignee" (ответственный) обязательно для заполнения.'
+    return res.status(201).json({
+      success: true,
+      message: 'Задача успешно сохранена в базе данных.',
+      data: newTask
     });
+  } catch (error) {
+    next(error);
   }
-
-  const taskStatus = status || 'backlog';
-  if (!ALLOWED_STATUSES.includes(taskStatus)) {
-    return res.status(400).json({
-      success: false,
-      error: `Недопустимый статус "${taskStatus}". Разрешенные значения: ${ALLOWED_STATUSES.join(', ')}.`
-    });
-  }
-
-  const taskPriority = priority || 'medium';
-  if (!ALLOWED_PRIORITIES.includes(taskPriority)) {
-    return res.status(400).json({
-      success: false,
-      error: `Недопустимый приоритет "${taskPriority}". Разрешенные значения: ${ALLOWED_PRIORITIES.join(', ')}.`
-    });
-  }
-
-  const newTask = {
-    id: nextId++,
-    title: title.trim(),
-    description: description ? description.trim() : '',
-    status: taskStatus,
-    priority: taskPriority,
-    assignee: assignee.trim(),
-    estimatedHours: Number(estimatedHours) >= 0 ? Number(estimatedHours) : 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-
-  tasks.push(newTask);
-
-  return res.status(201).json({
-    success: true,
-    message: 'Задача успешно создана.',
-    data: newTask
-  });
 });
 
 /**
  * @route   PUT /api/tasks/:id
- * @desc    Полное обновление существующей задачи (Idempotent Update)
+ * @desc    Полное обновление задачи в PostgreSQL
  */
-app.put('/api/tasks/:id', (req, res) => {
-  const taskId = parseInt(req.params.id, 10);
+app.put('/api/tasks/:id', async (req, res, next) => {
+  try {
+    const taskId = parseInt(req.params.id, 10);
 
-  if (isNaN(taskId)) {
-    return res.status(400).json({
-      success: false,
-      error: 'Идентификатор задачи должен быть числом.'
+    if (isNaN(taskId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Идентификатор задачи должен быть числом.'
+      });
+    }
+
+    const task = await Task.findByPk(taskId);
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        error: `Задача с ID ${taskId} не найдена.`
+      });
+    }
+
+    const { title, description, status, priority, assignee, estimatedHours } = req.body;
+
+    if (!title || !assignee || !status || !priority) {
+      return res.status(400).json({
+        success: false,
+        error: 'Для полного обновления (PUT) необходимо передать title, assignee, status, priority.'
+      });
+    }
+
+    if (!ALLOWED_STATUSES.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: `Недопустимый статус. Разрешено: ${ALLOWED_STATUSES.join(', ')}.`
+      });
+    }
+
+    if (!ALLOWED_PRIORITIES.includes(priority)) {
+      return res.status(400).json({
+        success: false,
+        error: `Недопустимый приоритет. Разрешено: ${ALLOWED_PRIORITIES.join(', ')}.`
+      });
+    }
+
+    await task.update({
+      title: title.trim(),
+      description: description !== undefined ? description.trim() : null,
+      status,
+      priority,
+      assignee: assignee.trim(),
+      estimatedHours: Number(estimatedHours) >= 0 ? Number(estimatedHours) : 0
     });
-  }
 
-  const taskIndex = tasks.findIndex(t => t.id === taskId);
-
-  if (taskIndex === -1) {
-    return res.status(404).json({
-      success: false,
-      error: `Задача с идентификатором ${taskId} не найдена.`
+    return res.status(200).json({
+      success: true,
+      message: `Задача с ID ${taskId} успешно обновлена.`,
+      data: task
     });
+  } catch (error) {
+    next(error);
   }
-
-  const { title, description, status, priority, assignee, estimatedHours } = req.body;
-
-  if (!title || !assignee || !status || !priority) {
-    return res.status(400).json({
-      success: false,
-      error: 'Для полного обновления (PUT) необходимо передать все обязательные поля: title, assignee, status, priority.'
-    });
-  }
-
-  if (!ALLOWED_STATUSES.includes(status)) {
-    return res.status(400).json({
-      success: false,
-      error: `Статус "${status}" некорректен. Допустимо: ${ALLOWED_STATUSES.join(', ')}.`
-    });
-  }
-
-  if (!ALLOWED_PRIORITIES.includes(priority)) {
-    return res.status(400).json({
-      success: false,
-      error: `Приоритет "${priority}" некорректен. Допустимо: ${ALLOWED_PRIORITIES.join(', ')}.`
-    });
-  }
-
-  const updatedTask = {
-    id: taskId,
-    title: title.trim(),
-    description: description !== undefined ? description.trim() : '',
-    status,
-    priority,
-    assignee: assignee.trim(),
-    estimatedHours: Number(estimatedHours) >= 0 ? Number(estimatedHours) : 0,
-    createdAt: tasks[taskIndex].createdAt,
-    updatedAt: new Date().toISOString()
-  };
-
-  tasks[taskIndex] = updatedTask;
-
-  return res.status(200).json({
-    success: true,
-    message: `Задача с ID ${taskId} успешно обновлена.`,
-    data: updatedTask
-  });
-});
-
-/**
- * @route   PATCH /api/tasks/:id
- * @desc    Частичное обновление задачи (например, изменение только статуса или исполнителя)
- */
-app.patch('/api/tasks/:id', (req, res) => {
-  const taskId = parseInt(req.params.id, 10);
-
-  if (isNaN(taskId)) {
-    return res.status(400).json({
-      success: false,
-      error: 'ID задачи должен быть числовым.'
-    });
-  }
-
-  const task = tasks.find(t => t.id === taskId);
-
-  if (!task) {
-    return res.status(404).json({
-      success: false,
-      error: `Задача с ID ${taskId} не найдена.`
-    });
-  }
-
-  const { title, description, status, priority, assignee, estimatedHours } = req.body;
-
-  if (status && !ALLOWED_STATUSES.includes(status)) {
-    return res.status(400).json({
-      success: false,
-      error: `Неверный статус. Допустимые варианты: ${ALLOWED_STATUSES.join(', ')}.`
-    });
-  }
-
-  if (priority && !ALLOWED_PRIORITIES.includes(priority)) {
-    return res.status(400).json({
-      success: false,
-      error: `Неверный приоритет. Допустимые варианты: ${ALLOWED_PRIORITIES.join(', ')}.`
-    });
-  }
-
-  if (title !== undefined) task.title = title.trim();
-  if (description !== undefined) task.description = description.trim();
-  if (status !== undefined) task.status = status;
-  if (priority !== undefined) task.priority = priority;
-  if (assignee !== undefined) task.assignee = assignee.trim();
-  if (estimatedHours !== undefined) task.estimatedHours = Number(estimatedHours);
-  task.updatedAt = new Date().toISOString();
-
-  return res.status(200).json({
-    success: true,
-    message: `Задача ID ${taskId} частично обновлена.`,
-    data: task
-  });
 });
 
 /**
  * @route   DELETE /api/tasks/:id
- * @desc    Удаление задачи по идентификатору
+ * @desc    Удаление задачи из PostgreSQL
  */
-app.delete('/api/tasks/:id', (req, res) => {
-  const taskId = parseInt(req.params.id, 10);
+app.delete('/api/tasks/:id', async (req, res, next) => {
+  try {
+    const taskId = parseInt(req.params.id, 10);
 
-  if (isNaN(taskId)) {
-    return res.status(400).json({
-      success: false,
-      error: 'Идентификатор задачи должен быть числом.'
+    if (isNaN(taskId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Идентификатор должен быть числом.'
+      });
+    }
+
+    const deletedCount = await Task.destroy({
+      where: { id: taskId }
     });
-  }
 
-  const taskIndex = tasks.findIndex(t => t.id === taskId);
+    if (deletedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: `Невозможно удалить: задача с ID ${taskId} не найдена в базе данных.`
+      });
+    }
 
-  if (taskIndex === -1) {
-    return res.status(404).json({
-      success: false,
-      error: `Невозможно удалить: задача с ID ${taskId} не найдена.`
+    return res.status(200).json({
+      success: true,
+      message: `Задача с ID ${taskId} успешно удалена из базы данных.`
     });
+  } catch (error) {
+    next(error);
   }
-
-  const deletedTask = tasks.splice(taskIndex, 1)[0];
-
-  return res.status(200).json({
-    success: true,
-    message: `Задача ID ${taskId} («${deletedTask.title}») успешно удалена.`,
-    data: deletedTask
-  });
 });
 
-// обработка маршрутов
+
 app.use((req, res, next) => {
   res.status(404).json({
     success: false,
-    error: `Запрошенный маршрут ${req.method} ${req.originalUrl} не существует на сервере.`
+    error: `Запрошенный маршрут ${req.method} ${req.originalUrl} не найден.`
   });
 });
 
-// обработчик ошибок express
 app.use((err, req, res, next) => {
-  console.error('Непредвиденная внутренняя ошибка сервера:', err.stack);
+  console.error('Ошибка в обработке запроса:', err);
+
+  // Ошибки валидации самого Sequelize
+  if (err.name === 'SequelizeValidationError') {
+    return res.status(400).json({
+      success: false,
+      error: err.errors.map(e => e.message).join(', ')
+    });
+  }
 
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
     return res.status(400).json({
@@ -355,18 +283,29 @@ app.use((err, req, res, next) => {
 
   return res.status(500).json({
     success: false,
-    error: 'Внутренняя ошибка сервера (Internal Server Error). Пожалуйста, повторите попытку позже.'
+    error: 'Внутренняя ошибка сервера (Database/Internal Error).'
   });
 });
 
-// запуск
-app.listen(PORT, () => {
-  console.log(`=======================================================`);
-  console.log(`Сервер Asana Task Manager запущен на порту: ${PORT}`);
-  console.log(`Базовый URL API: http://localhost:${PORT}/api/tasks`);
-  console.log(`Режим разработки (Nodemon активен)`);
-  console.log(`=======================================================`);
-});
+
+const startServer = async () => {
+  try {
+    await sequelize.authenticate();
+    console.log('✅ Успешное подключение к базе данных PostgreSQL через Sequelize!');
+
+    app.listen(PORT, () => {
+      console.log(`=======================================================`);
+      console.log(`🚀 Сервер Asana Task Manager (Sequelize) слушает порт: ${PORT}`);
+      console.log(`🔗 REST API: http://localhost:${PORT}/api/tasks`);
+      console.log(`=======================================================`);
+    });
+  } catch (error) {
+    console.error('❌ Не удалось подключиться к базе данных:', error.message);
+    process.exit(1);
+  }
+};
+
+startServer();
 
 // curl -X POST http://localhost:3000/api/tasks \
 //   -H "Content-Type: application/json" \
