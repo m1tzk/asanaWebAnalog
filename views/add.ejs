@@ -1,0 +1,212 @@
+<%- include('partials/header') %>
+
+<div class="form-box">
+  <h2 style="margin-bottom: 20px;">Новая задача</h2>
+
+  <% if (error) { %>
+    <div class="alert alert-danger" style="background: #fee2e2; color: #991b1b; padding: 10px; border-radius: 6px; margin-bottom: 15px;">
+      <%= error %>
+    </div>
+  <% } %>
+
+  <form id="taskForm" action="/add<%= currentUser.isAuthenticated ? '?auth=1' : '' %>" method="POST" novalidate>
+    <div class="form-group" style="margin-bottom: 15px;">
+      <div style="display: flex; justify-content: space-between;">
+        <label for="title">Название задачи *</label>
+        <small id="titleCounter" style="color: #64748b;">0/70</small>
+      </div>
+      <input 
+        type="text" 
+        id="title" 
+        name="title" 
+        class="form-control" 
+        maxlength="70" 
+        placeholder="Например: Настроить логирование" 
+        value="<%= typeof formData !== 'undefined' && formData.title ? formData.title : '' %>"
+        required
+      >
+      <small class="field-error" id="titleError" style="color: #dc2626; display: none; margin-top: 4px;"></small>
+    </div>
+
+    <div class="form-group" style="margin-bottom: 15px;">
+      <div style="display: flex; justify-content: space-between;">
+        <label for="description">Описание (необязательно)</label>
+        <small id="descCounter" style="color: #64748b;">0/200</small>
+      </div>
+      <textarea 
+        id="description" 
+        name="description" 
+        class="form-control" 
+        rows="3" 
+        maxlength="200" 
+        placeholder="Подробности задачи..."
+      ><%= typeof formData !== 'undefined' && formData.description ? formData.description : '' %></textarea>
+      <small class="field-error" id="descriptionError" style="color: #dc2626; display: none; margin-top: 4px;"></small>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+      <div class="form-group">
+        <div style="display: flex; justify-content: space-between;">
+          <label for="assignee">Исполнитель</label>
+          <small id="assigneeCounter" style="color: #64748b;">0/40</small>
+        </div>
+        <input 
+          type="text" 
+          id="assignee" 
+          name="assignee" 
+          class="form-control" 
+          maxlength="40" 
+          placeholder="По умолчанию: <%= currentUser.name %>"
+          value="<%= typeof formData !== 'undefined' && formData.assignee ? formData.assignee : '' %>"
+        >
+        <small class="field-error" id="assigneeError" style="color: #dc2626; display: none; margin-top: 4px;"></small>
+      </div>
+
+      <div class="form-group">
+        <label for="estimatedHours">Оценка часов (0 - 400)</label>
+        <input 
+          type="number" 
+          id="estimatedHours" 
+          name="estimatedHours" 
+          class="form-control" 
+          min="0" 
+          max="400" 
+          placeholder="1"
+          value="<%= typeof formData !== 'undefined' && formData.estimatedHours !== undefined ? formData.estimatedHours : '1' %>"
+        >
+        <small class="field-error" id="hoursError" style="color: #dc2626; display: none; margin-top: 4px;"></small>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+      <div class="form-group">
+        <label for="status">Статус</label>
+        <select id="status" name="status" class="form-control">
+          <option value="backlog">Бэклог (Backlog)</option>
+          <option value="in_progress">В работе (In Progress)</option>
+          <option value="done">Завершено (Done)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="priority">Приоритет</label>
+        <select id="priority" name="priority" class="form-control">
+          <option value="low">Низкий (Low)</option>
+          <option value="medium" selected>Средний (Medium)</option>
+          <option value="high">Высокий (High)</option>
+          <option value="urgent">Срочный (Urgent)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 10px;">
+      <button type="submit" id="submitBtn" class="btn" style="flex: 1;">Сохранить в PostgreSQL</button>
+      <a href="/<%= currentUser.isAuthenticated ? '?auth=1' : '' %>" class="btn btn-outline">Отмена</a>
+    </div>
+  </form>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('taskForm');
+    const titleInput = document.getElementById('title');
+    const descInput = document.getElementById('description');
+    const assigneeInput = document.getElementById('assignee');
+    const hoursInput = document.getElementById('estimatedHours');
+
+    const titleCounter = document.getElementById('titleCounter');
+    const descCounter = document.getElementById('descCounter');
+    const assigneeCounter = document.getElementById('assigneeCounter');
+
+    const titleError = document.getElementById('titleError');
+    const descError = document.getElementById('descriptionError');
+    const assigneeError = document.getElementById('assigneeError');
+    const hoursError = document.getElementById('hoursError');
+
+    const updateCounters = () => {
+      titleCounter.textContent = `${titleInput.value.length}/70`;
+      descCounter.textContent = `${descInput.value.length}/200`;
+      assigneeCounter.textContent = `${assigneeInput.value.length}/40`;
+    };
+
+    const validate = () => {
+      let isValid = true;
+
+      const titleVal = titleInput.value.trim();
+      if (!titleVal) {
+        titleError.textContent = 'Поле обязательно для заполнения и не может состоять только из пробелов.';
+        titleError.style.display = 'block';
+        titleInput.style.borderColor = '#dc2626';
+        isValid = false;
+      } else if (titleInput.value.length > 70) {
+        titleError.textContent = 'Длина не должна превышать 70 символов.';
+        titleError.style.display = 'block';
+        titleInput.style.borderColor = '#dc2626';
+        isValid = false;
+      } else {
+        titleError.style.display = 'none';
+        titleInput.style.borderColor = '';
+      }
+
+      if (descInput.value.length > 200) {
+        descError.textContent = 'Описание не может превышать 200 символов.';
+        descError.style.display = 'block';
+        descInput.style.borderColor = '#dc2626';
+        isValid = false;
+      } else {
+        descError.style.display = 'none';
+        descInput.style.borderColor = '';
+      }
+
+      if (assigneeInput.value.length > 40) {
+        assigneeError.textContent = 'Имя исполнителя не может превышать 40 символов.';
+        assigneeError.style.display = 'block';
+        assigneeInput.style.borderColor = '#dc2626';
+        isValid = false;
+      } else {
+        assigneeError.style.display = 'none';
+        assigneeInput.style.borderColor = '';
+      }
+
+      const hoursVal = hoursInput.value.trim();
+      if (hoursVal !== '') {
+        const num = Number(hoursVal);
+        if (isNaN(num) || num < 0) {
+          hoursError.textContent = 'Часы не могут быть отрицательными.';
+          hoursError.style.display = 'block';
+          hoursInput.style.borderColor = '#dc2626';
+          isValid = false;
+        } else if (num > 400) {
+          hoursError.textContent = 'Оценка не должна превышать 400 часов.';
+          hoursError.style.display = 'block';
+          hoursInput.style.borderColor = '#dc2626';
+          isValid = false;
+        } else {
+          hoursError.style.display = 'none';
+          hoursInput.style.borderColor = '';
+        }
+      } else {
+        hoursError.style.display = 'none';
+        hoursInput.style.borderColor = '';
+      }
+
+      return isValid;
+    };
+
+    [titleInput, descInput, assigneeInput, hoursInput].forEach(el => {
+      el.addEventListener('input', () => {
+        updateCounters();
+        validate();
+      });
+    });
+
+    updateCounters();
+
+    form.addEventListener('submit', (e) => {
+      if (!validate()) {
+        e.preventDefault();
+      }
+    });
+  });
+</script>
+
+<%- include('partials/footer') %>
