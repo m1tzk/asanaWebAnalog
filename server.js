@@ -13,6 +13,13 @@ const cors = require('cors');
 
 app.use(express.json());
 
+// Разрешаем кросс-доменные запросы с порта клиентского приложения
+app.use(cors({
+  origin: 'http://localhost:5173', // Порт Vite по умолчанию
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] ${req.method} ${req.originalUrl}`);
@@ -21,21 +28,26 @@ app.use((req, res, next) => {
 
 app.use('/auth', authRoutes);
 
-// Разрешаем кросс-доменные запросы с порта клиентского приложения
-app.use(cors({
-  origin: 'http://localhost:5173', // Порт Vite по умолчанию
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
 app.get('/api/tasks', async (req, res, next) => {
   try {
     const { status, priority, assignee, search } = req.query;
+    
+    // Параметры пагинации для Infinite Scroll
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 6;
+    const offset = (page - 1) * limit;
+
     const whereConditions = {};
 
-    if (status) whereConditions.status = status.toLowerCase();
-    if (priority) whereConditions.priority = priority.toLowerCase();
-    if (assignee) whereConditions.assignee = { [Op.iLike]: `%${assignee}%` };
+    if (status && status !== 'all') {
+      whereConditions.status = status.toLowerCase();
+    }
+    if (priority && priority !== 'all') {
+      whereConditions.priority = priority.toLowerCase();
+    }
+    if (assignee) {
+      whereConditions.assignee = { [Op.iLike]: `%${assignee}%` };
+    }
     if (search) {
       whereConditions[Op.or] = [
         { title: { [Op.iLike]: `%${search}%` } },
@@ -43,12 +55,22 @@ app.get('/api/tasks', async (req, res, next) => {
       ];
     }
 
-    const tasks = await Task.findAll({
+    // findAndCountAll возвращает { count, rows }
+    const { count, rows } = await Task.findAndCountAll({
       where: whereConditions,
+      limit,
+      offset,
       order: [['createdAt', 'DESC']]
     });
 
-    return res.status(200).json({ success: true, count: tasks.length, data: tasks });
+    return res.status(200).json({
+      success: true,
+      totalItems: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page,
+      hasMore: page * limit < count,
+      data: rows
+    });
   } catch (error) {
     next(error);
   }

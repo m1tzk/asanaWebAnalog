@@ -7,14 +7,14 @@ export function TaskItem({ task, onDelete, onEdit, onToggleStatus }) {
     <div className={`task-card ${isDone ? 'task-card-done' : ''}`}>
       <div className="task-header">
         <div className="task-badges">
-          <span className={`badge badge-status-${task.status}`}>
-            {task.status}
+          <span className={`badge badge-status-${task.status || 'backlog'}`}>
+            {task.status || 'backlog'}
           </span>
           <span className={`badge badge-priority-${task.priority}`}>
             {task.priority}
           </span>
         </div>
-        <span className="task-id">#{task.id.slice(-4)}</span>
+        <span className="task-id">#{String(task.id)}</span>
       </div>
 
       <h4 className="task-title">{task.title}</h4>
