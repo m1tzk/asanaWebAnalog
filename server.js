@@ -9,6 +9,8 @@ const authenticateToken = require('./middleware/auth');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const cors = require('cors');
+
 app.use(express.json());
 
 app.use((req, res, next) => {
@@ -18,6 +20,13 @@ app.use((req, res, next) => {
 });
 
 app.use('/auth', authRoutes);
+
+// Разрешаем кросс-доменные запросы с порта клиентского приложения
+app.use(cors({
+  origin: 'http://localhost:5173', // Порт Vite по умолчанию
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 app.get('/api/tasks', async (req, res, next) => {
   try {
