@@ -9,7 +9,7 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const { Op } = require('sequelize');
+const { Op } = require('sequelize'); 
 const { sequelize, Task } = require('./models');
 
 // Роутер аутентификации и JWT middleware из Лаб. 3
