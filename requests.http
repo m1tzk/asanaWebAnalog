@@ -1,0 +1,104 @@
+### ===========================================================================
+### ТЕСТИРОВАНИЕ MONGODB ATLAS & MONGOOSE (ЛАБОРАТОРНАЯ РАБОТА №6)
+### ===========================================================================
+@baseUrl = http://localhost:3000/api/tasks
+@contentType = application/json
+
+### 1. Создание новой задачи с тегами и подзадачами (POST)
+# @name createTask
+POST {{baseUrl}}
+Content-Type: {{contentType}}
+
+{
+  "title": "Интегрировать облачную базу данных MongoDB Atlas",
+  "description": "Спроектировать схему с вложенными подзадачами и комментариями",
+  "status": "in_progress",
+  "priority": "urgent",
+  "assignee": "Алексей Смирнов",
+  "estimatedHours": 8,
+  "tags": ["database", "nosql", "mongodb", "backend"],
+  "subtasks": [
+    { "title": "Зарегистрировать кластер M0 в Atlas" },
+    { "title": "Установить ODM Mongoose" }
+  ]
+}
+
+### Извлекаем сгенерированный MongoDB _id созданной задачи
+@taskId = {{createTask.response.body.data._id}}
+
+###
+
+### 2. Получение списка всех задач (GET)
+GET {{baseUrl}}
+
+###
+
+### 3. Фильтрация задач по тегу (GET with query ?tag=mongodb)
+GET {{baseUrl}}?tag=mongodb
+
+###
+
+### 4. Получение задачи по ее уникальному 24-значному ObjectId (GET)
+GET {{baseUrl}}/{{taskId}}
+
+###
+
+### 5. Добавление новой подзадачи во вложенный массив ($push)
+# @name addSubtask
+POST {{baseUrl}}/{{taskId}}/subtasks
+Content-Type: {{contentType}}
+
+{
+  "title": "Проверить сетевой доступ 0.0.0.0/0 в Atlas"
+}
+
+### Извлекаем _id новой вложенной подзадачи
+@subtaskId = {{addSubtask.response.body.data.subtasks[2]._id}}
+
+###
+
+### 6. Обновление элемента внутри массива (Завершение подзадачи)
+PATCH {{baseUrl}}/{{taskId}}/subtasks/{{subtaskId}}
+Content-Type: {{contentType}}
+
+{
+  "isCompleted": true
+}
+
+###
+
+### 7. Добавление комментария команды во вложенный массив
+POST {{baseUrl}}/{{taskId}}/comments
+Content-Type: {{contentType}}
+
+{
+  "author": "Мария Иванова",
+  "text": "Кластер успешно развернут, строка подключения проверена!"
+}
+
+###
+
+### 8. Проверка валидации Mongoose (Превышение лимита часов > 666 -> 400 Bad Request)
+POST {{baseUrl}}
+Content-Type: {{contentType}}
+
+{
+  "title": "Некорректная задача",
+  "assignee": "Тестер",
+  "estimatedHours": 999
+}
+
+###
+
+### 9. Проверка перехвата CastError (Невалидный ObjectId -> 400 Bad Request)
+GET {{baseUrl}}/invalid-id-12345
+
+###
+
+### 10. Удаление подзадачи из массива ($pull)
+DELETE {{baseUrl}}/{{taskId}}/subtasks/{{subtaskId}}
+
+###
+
+### 11. Удаление задачи целиком со всеми вложенными данными (DELETE)
+DELETE {{baseUrl}}/{{taskId}}
