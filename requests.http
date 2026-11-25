@@ -1,10 +1,7 @@
-### ===========================================================================
-### ТЕСТИРОВАНИЕ MONGODB ATLAS & MONGOOSE (ЛАБОРАТОРНАЯ РАБОТА №6)
-### ===========================================================================
 @baseUrl = http://localhost:3000/api/tasks
 @contentType = application/json
 
-### 1. Создание новой задачи с тегами и подзадачами (POST)
+### 1. 
 # @name createTask
 POST {{baseUrl}}
 Content-Type: {{contentType}}
@@ -23,27 +20,27 @@ Content-Type: {{contentType}}
   ]
 }
 
-### Извлекаем сгенерированный MongoDB _id созданной задачи
+### 
 @taskId = {{createTask.response.body.data._id}}
 
 ###
 
-### 2. Получение списка всех задач (GET)
+### 2.
 GET {{baseUrl}}
 
 ###
 
-### 3. Фильтрация задач по тегу (GET with query ?tag=mongodb)
+### 3. 
 GET {{baseUrl}}?tag=mongodb
 
 ###
 
-### 4. Получение задачи по ее уникальному 24-значному ObjectId (GET)
+### 4. 
 GET {{baseUrl}}/{{taskId}}
 
 ###
 
-### 5. Добавление новой подзадачи во вложенный массив ($push)
+### 5. 
 # @name addSubtask
 POST {{baseUrl}}/{{taskId}}/subtasks
 Content-Type: {{contentType}}
@@ -52,12 +49,12 @@ Content-Type: {{contentType}}
   "title": "Проверить сетевой доступ 0.0.0.0/0 в Atlas"
 }
 
-### Извлекаем _id новой вложенной подзадачи
+### 
 @subtaskId = {{addSubtask.response.body.data.subtasks[2]._id}}
 
 ###
 
-### 6. Обновление элемента внутри массива (Завершение подзадачи)
+### 6. 
 PATCH {{baseUrl}}/{{taskId}}/subtasks/{{subtaskId}}
 Content-Type: {{contentType}}
 
@@ -67,7 +64,7 @@ Content-Type: {{contentType}}
 
 ###
 
-### 7. Добавление комментария команды во вложенный массив
+### 7.
 POST {{baseUrl}}/{{taskId}}/comments
 Content-Type: {{contentType}}
 
@@ -78,7 +75,7 @@ Content-Type: {{contentType}}
 
 ###
 
-### 8. Проверка валидации Mongoose (Превышение лимита часов > 666 -> 400 Bad Request)
+### 8.
 POST {{baseUrl}}
 Content-Type: {{contentType}}
 
@@ -90,15 +87,15 @@ Content-Type: {{contentType}}
 
 ###
 
-### 9. Проверка перехвата CastError (Невалидный ObjectId -> 400 Bad Request)
+### 9. 
 GET {{baseUrl}}/invalid-id-12345
 
 ###
 
-### 10. Удаление подзадачи из массива ($pull)
+### 10. 
 DELETE {{baseUrl}}/{{taskId}}/subtasks/{{subtaskId}}
 
 ###
 
-### 11. Удаление задачи целиком со всеми вложенными данными (DELETE)
+### 11. 
 DELETE {{baseUrl}}/{{taskId}}

@@ -2,27 +2,41 @@ const express = require('express');
 const router = express.Router();
 const Task = require('../models/Task');
 
+// Вспомогательная функция для отправки WebSocket-события из REST-маршрута
+function emitTaskEvent(req, eventName, payload) {
+  const io = req.app.get('io');
+  if (io) {
+    io.emit(eventName, payload);
+  }
+}
+
 // ============================================================================
 // 1. БАЗОВЫЕ CRUD-ОПЕРАЦИИ НАД ЗАДАЧАМИ
 // ============================================================================
 
 /**
  * @route   GET /api/tasks
- * @desc    Получение списка задач с фильтрацией, поиском по тегам и сортировкой
+ * @desc    Получение списка задач с фильтрацией, поиском, сортировкой и пагинацией
  */
 router.get('/', async (req, res, next) => {
   try {
-    const { status, priority, assignee, tag, search, sortBy = 'createdAt', order = 'desc' } = req.query;
-    const filter = {};
+    const {
+      status,
+      priority,
+      assignee,
+      tag,
+      search,
+      sortBy = 'createdAt',
+      order = 'desc',
+      page,
+      limit
+    } = req.query;
 
+    const filter = {};
     if (status) filter.status = status;
     if (priority) filter.priority = priority;
     if (assignee) filter.assignee = { $regex: assignee, $options: 'i' };
-    
-    // Поиск по вхождению в массив тегов
     if (tag) filter.tags = tag;
-
-    // Полнотекстовый поиск по названию или описанию
     if (search) {
       filter.$or = [
         { title: { $regex: search, $options: 'i' } },
@@ -31,11 +45,36 @@ router.get('/', async (req, res, next) => {
     }
 
     const sortOrder = order === 'asc' ? 1 : -1;
-    const tasks = await Task.find(filter).sort({ [sortBy]: sortOrder });
 
+    // Если клиент (React) передал параметры пагинации page & limit
+    if (page && limit) {
+      const pageNum = Math.max(1, parseInt(page, 10));
+      const limitNum = Math.max(1, parseInt(limit, 10));
+
+      const [totalItems, tasks] = await Promise.all([
+        Task.countDocuments(filter),
+        Task.find(filter)
+          .sort({ [sortBy]: sortOrder })
+          .skip((pageNum - 1) * limitNum)
+          .limit(limitNum)
+      ]);
+
+      return res.status(200).json({
+        success: true,
+        count: tasks.length,
+        totalItems,
+        hasMore: pageNum * limitNum < totalItems,
+        data: tasks
+      });
+    }
+
+    // Стандартный ответ без пагинации (обратная совместимость с ЛР №6)
+    const tasks = await Task.find(filter).sort({ [sortBy]: sortOrder });
     res.status(200).json({
       success: true,
       count: tasks.length,
+      totalItems: tasks.length,
+      hasMore: false,
       data: tasks
     });
   } catch (err) {
@@ -45,16 +84,13 @@ router.get('/', async (req, res, next) => {
 
 /**
  * @route   GET /api/tasks/:id
- * @desc    Получение одной задачи со всеми вложенными подзадачами и комментариями
  */
 router.get('/:id', async (req, res, next) => {
   try {
     const task = await Task.findById(req.params.id);
-
     if (!task) {
       return res.status(404).json({ success: false, error: 'Задача с указанным ID не найдена' });
     }
-
     res.status(200).json({ success: true, data: task });
   } catch (err) {
     next(err);
@@ -63,11 +99,14 @@ router.get('/:id', async (req, res, next) => {
 
 /**
  * @route   POST /api/tasks
- * @desc    Создание новой задачи (с возможностью сразу передать подзадачи и теги)
  */
 router.post('/', async (req, res, next) => {
   try {
-    const newTask = await Task.create(req.body);
+    // Исключаем временные клиентские поля (например, id: "task-171...")
+    const { id, _id, createdAt, updatedAt, ...cleanBody } = req.body;
+    const newTask = await Task.create(cleanBody);
+
+    emitTaskEvent(req, 'task:created', newTask);
 
     res.status(201).json({
       success: true,
@@ -81,19 +120,21 @@ router.post('/', async (req, res, next) => {
 
 /**
  * @route   PUT /api/tasks/:id
- * @desc    Полное обновление задачи
  */
 router.put('/:id', async (req, res, next) => {
   try {
+    const { id, _id, createdAt, updatedAt, ...cleanBody } = req.body;
     const updatedTask = await Task.findByIdAndUpdate(
       req.params.id,
-      req.body,
-      { new: true, runValidators: true } // new: true возвращает обновленный документ
+      cleanBody,
+      { new: true, runValidators: true }
     );
 
     if (!updatedTask) {
       return res.status(404).json({ success: false, error: 'Задача не найдена' });
     }
+
+    emitTaskEvent(req, 'task:updated', updatedTask);
 
     res.status(200).json({
       success: true,
@@ -107,19 +148,21 @@ router.put('/:id', async (req, res, next) => {
 
 /**
  * @route   PATCH /api/tasks/:id
- * @desc    Частичное обновление задачи
  */
 router.patch('/:id', async (req, res, next) => {
   try {
+    const { id, _id, ...cleanBody } = req.body;
     const updatedTask = await Task.findByIdAndUpdate(
       req.params.id,
-      { $set: req.body },
+      { $set: cleanBody },
       { new: true, runValidators: true }
     );
 
     if (!updatedTask) {
       return res.status(404).json({ success: false, error: 'Задача не найдена' });
     }
+
+    emitTaskEvent(req, 'task:updated', updatedTask);
 
     res.status(200).json({
       success: true,
@@ -133,7 +176,6 @@ router.patch('/:id', async (req, res, next) => {
 
 /**
  * @route   DELETE /api/tasks/:id
- * @desc    Удаление задачи (и всех ее вложенных подзадач и комментариев)
  */
 router.delete('/:id', async (req, res, next) => {
   try {
@@ -142,6 +184,8 @@ router.delete('/:id', async (req, res, next) => {
     if (!deletedTask) {
       return res.status(404).json({ success: false, error: 'Задача не найдена' });
     }
+
+    emitTaskEvent(req, 'task:deleted', { id: deletedTask.id, title: deletedTask.title });
 
     res.status(200).json({
       success: true,
@@ -157,10 +201,6 @@ router.delete('/:id', async (req, res, next) => {
 // 2. ОПЕРАЦИИ С ВЛОЖЕННЫМИ СТРУКТУРАМИ (SUBDOCUMENTS & ARRAYS)
 // ============================================================================
 
-/**
- * @route   POST /api/tasks/:id/subtasks
- * @desc    Добавление подзадачи во вложенный массив ($push)
- */
 router.post('/:id/subtasks', async (req, res, next) => {
   try {
     const { title } = req.body;
@@ -168,20 +208,17 @@ router.post('/:id/subtasks', async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Поле title подзадачи обязательно' });
     }
 
-    // Оператор $push атомарно добавляет элемент во вложенный массив MongoDB
     const updatedTask = await Task.findByIdAndUpdate(
       req.params.id,
-      {
-        $push: {
-          subtasks: { title: title.trim(), isCompleted: false }
-        }
-      },
+      { $push: { subtasks: { title: title.trim(), isCompleted: false } } },
       { new: true, runValidators: true }
     );
 
     if (!updatedTask) {
       return res.status(404).json({ success: false, error: 'Задача не найдена' });
     }
+
+    emitTaskEvent(req, 'task:updated', updatedTask);
 
     res.status(201).json({
       success: true,
@@ -193,10 +230,6 @@ router.post('/:id/subtasks', async (req, res, next) => {
   }
 });
 
-/**
- * @route   PATCH /api/tasks/:id/subtasks/:subtaskId
- * @desc    Обновление элемента внутри массива (переключение выполнения подзадачи)
- */
 router.patch('/:id/subtasks/:subtaskId', async (req, res, next) => {
   try {
     const { isCompleted } = req.body;
@@ -206,19 +239,18 @@ router.patch('/:id/subtasks/:subtaskId', async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'Задача не найдена' });
     }
 
-    // Поиск конкретного субдокумента по его уникальному ObjectId
     const subtask = task.subtasks.id(req.params.subtaskId);
     if (!subtask) {
       return res.status(404).json({ success: false, error: 'Подзадача с данным ID не найдена' });
     }
 
-    // Обновление состояния субдокумента
     if (isCompleted !== undefined) {
       subtask.isCompleted = isCompleted;
       subtask.completedAt = isCompleted ? new Date() : null;
     }
 
     await task.save();
+    emitTaskEvent(req, 'task:updated', task);
 
     res.status(200).json({
       success: true,
@@ -230,24 +262,19 @@ router.patch('/:id/subtasks/:subtaskId', async (req, res, next) => {
   }
 });
 
-/**
- * @route   DELETE /api/tasks/:id/subtasks/:subtaskId
- * @desc    Удаление подзадачи из вложенного массива ($pull)
- */
 router.delete('/:id/subtasks/:subtaskId', async (req, res, next) => {
   try {
-    // Оператор $pull удаляет элементы из массива, соответствующие условию
     const updatedTask = await Task.findByIdAndUpdate(
       req.params.id,
-      {
-        $pull: { subtasks: { _id: req.params.subtaskId } }
-      },
+      { $pull: { subtasks: { _id: req.params.subtaskId } } },
       { new: true }
     );
 
     if (!updatedTask) {
       return res.status(404).json({ success: false, error: 'Задача не найдена' });
     }
+
+    emitTaskEvent(req, 'task:updated', updatedTask);
 
     res.status(200).json({
       success: true,
@@ -259,10 +286,6 @@ router.delete('/:id/subtasks/:subtaskId', async (req, res, next) => {
   }
 });
 
-/**
- * @route   POST /api/tasks/:id/comments
- * @desc    Добавление комментария в ленту обсуждения задачи
- */
 router.post('/:id/comments', async (req, res, next) => {
   try {
     const { author, text } = req.body;
@@ -272,17 +295,15 @@ router.post('/:id/comments', async (req, res, next) => {
 
     const updatedTask = await Task.findByIdAndUpdate(
       req.params.id,
-      {
-        $push: {
-          comments: { author: author.trim(), text: text.trim() }
-        }
-      },
+      { $push: { comments: { author: author.trim(), text: text.trim() } } },
       { new: true, runValidators: true }
     );
 
     if (!updatedTask) {
       return res.status(404).json({ success: false, error: 'Задача не найдена' });
     }
+
+    emitTaskEvent(req, 'task:updated', updatedTask);
 
     res.status(201).json({
       success: true,

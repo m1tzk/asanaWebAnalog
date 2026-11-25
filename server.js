@@ -1,17 +1,22 @@
 /**
  * ============================================================================
- * ЛАБОРАТОРНАЯ РАБОТА №6: REST API НА БАЗЕ MONGODB ATLAS & MONGOOSE
- * Ветка репозитория: 26
+ * ЛАБОРАТОРНАЯ РАБОТА №7: REAL-TIME НА БАЗЕ WEBSOCKET (SOCKET.IO) + MONGODB
+ * Ветка репозитория: 27
  * ============================================================================
  */
 
 require('dotenv').config();
 const dns = require('dns');
-dns.setServers(['8.8.8.8', '8.8.4.4']); // Принудительно используем Google DNS для SRV/TXT записей
+dns.setServers(['8.8.8.8', '8.8.4.4']);
+
+const http = require('http');
 const express = require('express');
 const mongoose = require('mongoose');
+const cors = require('cors');
+const { Server } = require('socket.io');
 
 const taskRoutes = require('./routes/tasks');
+const initSocket = require('./socket/socketHandler');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,9 +25,9 @@ const PORT = process.env.PORT || 3000;
 // 1. СИСТЕМНЫЕ MIDDLEWARE
 // ============================================================================
 
+app.use(cors()); // Разрешаем запросы от React-клиента (http://localhost:5173)
 app.use(express.json());
 
-// Логирующее middleware
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] ${req.method} ${req.originalUrl}`);
@@ -30,24 +35,36 @@ app.use((req, res, next) => {
 });
 
 // ============================================================================
-// 2. ПОДКЛЮЧЕНИЕ МАРШРУТОВ
+// 2. ПОДКЛЮЧЕНИЕ МАРШРУТОВ И СОЗДАНИЕ HTTP + SOCKET.IO СЕРВЕРА
 // ============================================================================
 
 app.use('/api/tasks', taskRoutes);
 
-// Корневой проверочный маршрут
 app.get('/', (req, res) => {
   res.json({
-    message: 'Asana Task Manager API (MongoDB Atlas Edition) активен.',
+    message: 'Asana Task Manager API (MongoDB Atlas + Socket.IO Real-Time) активен.',
     endpoints: '/api/tasks'
   });
 });
+
+// Оборачиваем Express в HTTP-сервер и прикрепляем Socket.IO
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
+  },
+  maxHttpBufferSize: 1e6 // Ограничение размера сообщения: 1 МБ
+});
+
+// Сохраняем экземпляр io в app, чтобы routes/tasks.js мог отправлять события
+app.set('io', io);
+initSocket(io);
 
 // ============================================================================
 // 3. ОБРАБОТКА ОШИБОК
 // ============================================================================
 
-// 404 Fallback
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -55,20 +72,14 @@ app.use((req, res) => {
   });
 });
 
-// Глобальный перехватчик ошибок (с поддержкой валидации Mongoose и неверных ObjectId)
 app.use((err, req, res, next) => {
   console.error('Ошибка сервера:', err.message);
 
-  // Ошибка валидации Mongoose (ValidationError)
   if (err.name === 'ValidationError') {
-    const messages = Object.values(err.errors).map(val => val.message);
-    return res.status(400).json({
-      success: false,
-      error: messages.join(', ')
-    });
+    const messages = Object.values(err.errors).map((val) => val.message);
+    return res.status(400).json({ success: false, error: messages.join(', ') });
   }
 
-  // Ошибка неверного формата ObjectId (CastError)
   if (err.name === 'CastError' && err.kind === 'ObjectId') {
     return res.status(400).json({
       success: false,
@@ -89,19 +100,19 @@ app.use((err, req, res, next) => {
 const startServer = async () => {
   try {
     const mongoUri = process.env.MONGO_URI;
-
     if (!mongoUri) {
       throw new Error('Переменная MONGO_URI не задана в файле .env');
     }
 
     console.log('⏳ Подключение к облачному кластеру MongoDB Atlas...');
     await mongoose.connect(mongoUri);
-
     console.log('✅ Успешное подключение к MongoDB Atlas!');
-    app.listen(PORT, () => {
+
+    // Важно: запускаем server.listen (HTTP + WebSocket), а не app.listen
+    server.listen(PORT, () => {
       console.log(`=======================================================`);
-      console.log(`🚀 Сервер запущен на порту: ${PORT}`);
-      console.log(`🔗 Базовый URL API: http://localhost:${PORT}/api/tasks`);
+      console.log(`🚀 Сервер (REST + Socket.IO) запущен на порту: ${PORT}`);
+      console.log(`🔗 API задач: http://localhost:${PORT}/api/tasks`);
       console.log(`=======================================================`);
     });
   } catch (err) {

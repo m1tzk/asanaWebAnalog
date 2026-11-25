@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
 
-// 1. Схема вложенного документа подзадачи (Subtask)
 const subtaskSchema = new mongoose.Schema({
   title: {
     type: String,
@@ -18,7 +17,6 @@ const subtaskSchema = new mongoose.Schema({
   }
 });
 
-// 2. Схема вложенного документа комментария (Comment)
 const commentSchema = new mongoose.Schema({
   author: {
     type: String,
@@ -38,7 +36,6 @@ const commentSchema = new mongoose.Schema({
   }
 });
 
-// 3. Основная схема задачи (Task Schema)
 const taskSchema = new mongoose.Schema(
   {
     title: {
@@ -81,30 +78,25 @@ const taskSchema = new mongoose.Schema(
       max: [666, 'Трудозатраты не могут превышать 666 часов'],
       default: 0
     },
-    // Массив строк для меток/тегов
     tags: {
       type: [String],
       default: []
     },
-    // Вложенный массив документов подзадач
     subtasks: [subtaskSchema],
-    // Вложенный массив документов комментариев
+
     comments: [commentSchema]
   },
   {
-    timestamps: true // Автоматически добавляет createdAt и updatedAt
+    timestamps: true 
   }
 );
 
-// Индекс для ускорения фильтрации по статусу и исполнителю
 taskSchema.index({ status: 1, assignee: 1 });
 
-// Статический метод модели: поиск срочных незавершенных задач
 taskSchema.statics.findUrgent = function () {
   return this.find({ priority: 'urgent', status: { $ne: 'done' } });
 };
 
-// Метод экземпляра: переключение выполнения подзадачи
 taskSchema.methods.toggleSubtask = function (subtaskId) {
   const subtask = this.subtasks.id(subtaskId);
   if (!subtask) return null;
@@ -112,6 +104,9 @@ taskSchema.methods.toggleSubtask = function (subtaskId) {
   subtask.completedAt = subtask.isCompleted ? new Date() : null;
   return this.save();
 };
+
+taskSchema.set('toJSON', { virtuals: true });
+taskSchema.set('toObject', { virtuals: true });
 
 const Task = mongoose.model('Task', taskSchema);
 
