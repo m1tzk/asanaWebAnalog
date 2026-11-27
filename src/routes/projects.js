@@ -3,6 +3,37 @@ const router = express.Router();
 let { projects, tasks, counters } = require('../data/mockData');
 
 // GET /api/v1/projects — Список проектов с поиском и сортировкой
+/**
+ * @swagger
+ * /api/v1/projects:
+ *   get:
+ *     summary: Список проектов с поиском и сортировкой
+ *     tags: [Projects]
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Поиск по названию и описанию
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [name, createdAt]
+ *         description: Поле сортировки
+ *       - in: query
+ *         name: order
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: asc
+ *         description: Направление сортировки
+ *     responses:
+ *       200:
+ *         description: Список проектов успешно получен
+ *       500:
+ *         description: Внутренняя ошибка сервера
+ */
 router.get('/', (req, res) => {
   let result = [...projects];
   const { search, sortBy, order = 'asc' } = req.query;
@@ -24,6 +55,27 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/v1/projects/:id — Детали проекта
+/**
+ * @swagger
+ * /api/v1/projects/{id}:
+ *   get:
+ *     summary: Получение проекта по ID
+ *     tags: [Projects]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID проекта
+ *     responses:
+ *       200:
+ *         description: Детали проекта
+ *       400:
+ *         description: ID проекта должен быть числом
+ *       404:
+ *         description: Проект не найден
+ */
 router.get('/:id', (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ success: false, error: 'ID проекта должен быть числом.' });
@@ -35,6 +87,27 @@ router.get('/:id', (req, res) => {
 });
 
 // GET /api/v1/projects/:id/tasks — Вложенный ресурс: задачи проекта
+/**
+ * @swagger
+ * /api/v1/projects/{id}/tasks:
+ *   get:
+ *     summary: Все задачи выбранного проекта
+ *     tags: [Projects]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID проекта
+ *     responses:
+ *       200:
+ *         description: Список задач проекта
+ *       400:
+ *         description: ID проекта должен быть числом
+ *       404:
+ *         description: Проект не найден
+ */
 router.get('/:id/tasks', (req, res) => {
   const projectId = parseInt(req.params.id, 10);
   if (isNaN(projectId)) return res.status(400).json({ success: false, error: 'ID проекта должен быть числом.' });
@@ -47,6 +120,42 @@ router.get('/:id/tasks', (req, res) => {
 });
 
 // POST /api/v1/projects — Создание проекта
+/**
+ * @swagger
+ * /api/v1/projects:
+ *   post:
+ *     summary: Создание нового проекта
+ *     tags: [Projects]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 maxLength: 200
+ *                 example: Мобильное приложение
+ *               description:
+ *                 type: string
+ *                 maxLength: 1000
+ *                 example: Клиент на React Native
+ *               color:
+ *                 type: string
+ *                 example: '#10b981'
+ *               deadline:
+ *                 type: string
+ *                 format: date-time
+ *                 example: '2026-11-15T18:00:00.000Z'
+ *     responses:
+ *       201:
+ *         description: Проект успешно создан
+ *       400:
+ *         description: Ошибка валидации полей
+ */
 router.post('/', (req, res) => {
   const { name, description, color, deadline } = req.body;
 
@@ -74,6 +183,49 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/v1/projects/:id — Полное обновление проекта
+/**
+ * @swagger
+ * /api/v1/projects/{id}:
+ *   put:
+ *     summary: Полное обновление проекта
+ *     tags: [Projects]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - deadline
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: Обновленный портал
+ *               description:
+ *                 type: string
+ *                 example: Новое описание проекта
+ *               color:
+ *                 type: string
+ *                 example: '#4f46e5'
+ *               deadline:
+ *                 type: string
+ *                 format: date-time
+ *                 example: '2026-12-31T23:59:59.000Z'
+ *     responses:
+ *       200:
+ *         description: Проект обновлен
+ *       400:
+ *         description: Некорректный ID или не заполнены name и deadline
+ *       404:
+ *         description: Проект не найден
+ */
 router.put('/:id', (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ success: false, error: 'ID должен быть числом.' });
@@ -99,6 +251,45 @@ router.put('/:id', (req, res) => {
 });
 
 // PATCH /api/v1/projects/:id — Частичное обновление проекта
+/**
+ * @swagger
+ * /api/v1/projects/{id}:
+ *   patch:
+ *     summary: Частичное обновление проекта
+ *     tags: [Projects]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 minLength: 1
+ *                 maxLength: 200
+ *               description:
+ *                 type: string
+ *               color:
+ *                 type: string
+ *                 example: '#ef4444'
+ *               deadline:
+ *                 type: string
+ *                 format: date-time
+ *     responses:
+ *       200:
+ *         description: Проект частично обновлен
+ *       400:
+ *         description: Ошибка валидации
+ *       404:
+ *         description: Проект не найден
+ */
 router.patch('/:id', (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ success: false, error: 'ID должен быть числом.' });
@@ -121,6 +312,26 @@ router.patch('/:id', (req, res) => {
 });
 
 // DELETE /api/v1/projects/:id — Удаление проекта
+/**
+ * @swagger
+ * /api/v1/projects/{id}:
+ *   delete:
+ *     summary: Удаление проекта
+ *     tags: [Projects]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Проект успешно удален
+ *       400:
+ *         description: ID должен быть числом
+ *       404:
+ *         description: Проект не найден
+ */
 router.delete('/:id', (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ success: false, error: 'ID должен быть числом.' });

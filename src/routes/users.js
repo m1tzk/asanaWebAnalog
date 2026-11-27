@@ -5,6 +5,25 @@ let { users, counters } = require('../data/mockData');
 const ALLOWED_ROLES = ['admin', 'manager', 'developer', 'designer'];
 
 // GET /api/v1/users — Список всех участников
+/**
+ * @swagger
+ * /api/v1/users:
+ *   get:
+ *     summary: Список всех участников команды
+ *     tags: [Users]
+ *     parameters:
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *           enum: [admin, manager, developer, designer]
+ *         description: Фильтр по роли участника
+ *     responses:
+ *       200:
+ *         description: Список участников успешно получен
+ *       500:
+ *         description: Внутренняя ошибка сервера
+ */
 router.get('/', (req, res) => {
   const { role } = req.query;
   let result = [...users];
@@ -17,6 +36,26 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/v1/users/:id — Получение участника по ID
+/**
+ * @swagger
+ * /api/v1/users/{id}:
+ *   get:
+ *     summary: Получение участника по ID
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Профиль участника
+ *       400:
+ *         description: ID пользователя должен быть числом
+ *       404:
+ *         description: Пользователь не найден
+ */
 router.get('/:id', (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ success: false, error: 'ID пользователя должен быть числом.' });
@@ -28,6 +67,43 @@ router.get('/:id', (req, res) => {
 });
 
 // POST /api/v1/users — Добавление участника
+/**
+ * @swagger
+ * /api/v1/users:
+ *   post:
+ *     summary: Добавление участника команды (уникальный email)
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 maxLength: 100
+ *                 example: Сергей Васильев
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: sergey.vasiliev@asana.team
+ *               role:
+ *                 type: string
+ *                 enum: [admin, manager, developer, designer]
+ *                 default: developer
+ *                 example: developer
+ *     responses:
+ *       201:
+ *         description: Участник успешно добавлен
+ *       400:
+ *         description: Ошибка валидации (name, email, role)
+ *       409:
+ *         description: Пользователь с таким email уже существует
+ */
 router.post('/', (req, res) => {
   const { name, email, role } = req.body;
 
@@ -64,6 +140,48 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/v1/users/:id — Полное обновление
+/**
+ * @swagger
+ * /api/v1/users/{id}:
+ *   put:
+ *     summary: Полное обновление профиля участника
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *               - role
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: Сергей Васильев
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: sergey.vasiliev@asana.team
+ *               role:
+ *                 type: string
+ *                 enum: [admin, manager, developer, designer]
+ *                 example: manager
+ *     responses:
+ *       200:
+ *         description: Данные пользователя обновлены
+ *       400:
+ *         description: Некорректный ID или не указаны name, email, role
+ *       404:
+ *         description: Пользователь не найден
+ */
 router.put('/:id', (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ success: false, error: 'ID должен быть числом.' });
@@ -88,6 +206,39 @@ router.put('/:id', (req, res) => {
 });
 
 // PATCH /api/v1/users/:id — Частичное обновление
+/**
+ * @swagger
+ * /api/v1/users/{id}:
+ *   patch:
+ *     summary: Частичное обновление профиля (смена имени или роли)
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *                 enum: [admin, manager, developer, designer]
+ *                 example: admin
+ *     responses:
+ *       200:
+ *         description: Профиль участника частично изменен
+ *       400:
+ *         description: Некорректный ID или недопустимая роль
+ *       404:
+ *         description: Пользователь не найден
+ */
 router.patch('/:id', (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ success: false, error: 'ID должен быть числом.' });
@@ -108,6 +259,26 @@ router.patch('/:id', (req, res) => {
 });
 
 // DELETE /api/v1/users/:id — Удаление участника
+/**
+ * @swagger
+ * /api/v1/users/{id}:
+ *   delete:
+ *     summary: Удаление участника
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Пользователь удален
+ *       400:
+ *         description: ID должен быть числом
+ *       404:
+ *         description: Пользователь не найден
+ */
 router.delete('/:id', (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ success: false, error: 'ID должен быть числом.' });
