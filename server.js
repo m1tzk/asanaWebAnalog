@@ -9,6 +9,8 @@ require('dotenv').config();
 const dns = require('dns');
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 
+const fs = require('fs');
+const path = require('path');
 const http = require('http');
 const express = require('express');
 const mongoose = require('mongoose');
@@ -21,22 +23,29 @@ const initSocket = require('./socket/socketHandler');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ============================================================================
-// 1. СИСТЕМНЫЕ MIDDLEWARE
-// ============================================================================
 
-app.use(cors()); // Разрешаем запросы от React-клиента (http://localhost:5173)
+app.use(cors()); 
 app.use(express.json());
 
+// Создаём папку logs при старте (если ещё не существует)
+const logsDir = path.join(__dirname, 'logs');
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
+const logFilePath = path.join(logsDir, 'server.log');
+
+// Логирующее middleware (вывод в консоль + сохранение в файл внутри volume)
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${req.method} ${req.originalUrl}`);
+  const logEntry = `[${timestamp}] ${req.method} ${req.originalUrl}\n`;
+  console.log(logEntry.trim());
+
+  fs.appendFile(logFilePath, logEntry, (err) => {
+    if (err) console.error('Ошибка записи лога:', err.message);
+  });
+
   next();
 });
-
-// ============================================================================
-// 2. ПОДКЛЮЧЕНИЕ МАРШРУТОВ И СОЗДАНИЕ HTTP + SOCKET.IO СЕРВЕРА
-// ============================================================================
 
 app.use('/api/tasks', taskRoutes);
 
@@ -47,23 +56,18 @@ app.get('/', (req, res) => {
   });
 });
 
-// Оборачиваем Express в HTTP-сервер и прикрепляем Socket.IO
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
   },
-  maxHttpBufferSize: 1e6 // Ограничение размера сообщения: 1 МБ
+  maxHttpBufferSize: 1e6 
 });
 
-// Сохраняем экземпляр io в app, чтобы routes/tasks.js мог отправлять события
 app.set('io', io);
 initSocket(io);
 
-// ============================================================================
-// 3. ОБРАБОТКА ОШИБОК
-// ============================================================================
 
 app.use((req, res) => {
   res.status(404).json({
@@ -93,10 +97,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ============================================================================
-// 4. ПОДКЛЮЧЕНИЕ К MONGODB ATLAS И ЗАПУСК СЕРВЕРА
-// ============================================================================
-
 const startServer = async () => {
   try {
     const mongoUri = process.env.MONGO_URI;
@@ -105,10 +105,11 @@ const startServer = async () => {
     }
 
     console.log('⏳ Подключение к облачному кластеру MongoDB Atlas...');
-    await mongoose.connect(mongoUri);
+    await mongoose.connect(mongoUri, {
+      family: 4
+    });
     console.log('✅ Успешное подключение к MongoDB Atlas!');
 
-    // Важно: запускаем server.listen (HTTP + WebSocket), а не app.listen
     server.listen(PORT, () => {
       console.log(`=======================================================`);
       console.log(`🚀 Сервер (REST + Socket.IO) запущен на порту: ${PORT}`);

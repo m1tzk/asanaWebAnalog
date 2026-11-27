@@ -1,7 +1,6 @@
 const ChatMessage = require('../models/ChatMessage');
 const Poll = require('../models/Poll');
 
-// Хранилище активных подключений: socket.id -> { username, room }
 const onlineUsers = new Map();
 
 function getUsersInRoom(room) {
@@ -15,7 +14,6 @@ function getUsersInRoom(room) {
 }
 
 module.exports = function initSocket(io) {
-  // Получаем имя пользователя из handshake при подключении
   io.use((socket, next) => {
     const username = socket.handshake.auth?.username?.trim();
     if (!username) {
@@ -28,14 +26,12 @@ module.exports = function initSocket(io) {
   io.on('connection', (socket) => {
     console.log(`🟢 [WS] Подключён: ${socket.username} (${socket.id})`);
 
-    // Уведомляем остальных подключённых пользователей о новом участнике онлайн
     socket.broadcast.emit('global_presence', {
       type: 'join',
       username: socket.username,
       message: `${socket.username} подключился(ась) к рабочему пространству`
     });
 
-    // 1. Вход в комнату (канал проекта: #general, #sprint-planning, #frontend, #backend)
     socket.on('join_room', async (roomName, callback) => {
       try {
         const previous = onlineUsers.get(socket.id);
@@ -53,19 +49,16 @@ module.exports = function initSocket(io) {
 
         socket.join(roomName);
 
-        // Загружаем историю сообщений и опросы из MongoDB Atlas
         const [history, polls] = await Promise.all([
           ChatMessage.find({ room: roomName }).sort({ createdAt: -1 }).limit(50).lean(),
           Poll.find({ room: roomName }).sort({ createdAt: -1 }).limit(15).lean()
         ]);
 
-        // Уведомляем других участников комнаты
         socket.to(roomName).emit('system_notification', {
           text: `${socket.username} вошёл(а) в канал #${roomName}`,
           createdAt: new Date()
         });
 
-        // Обновляем список пользователей в комнате у всех
         io.to(roomName).emit('room_users', getUsersInRoom(roomName));
 
         if (typeof callback === 'function') {
@@ -81,7 +74,6 @@ module.exports = function initSocket(io) {
       }
     });
 
-    // 2. Отправка сообщения в чат комнаты с сохранением в MongoDB
     socket.on('chat_message', async ({ room, text }, callback) => {
       try {
         if (!room || !text?.trim()) return;
@@ -100,7 +92,6 @@ module.exports = function initSocket(io) {
       }
     });
 
-    // 3. Индикатор "печатает..." (broadcast внутри комнаты без записи в БД)
     socket.on('typing', ({ room, isTyping }) => {
       if (!room) return;
       socket.to(room).emit('user_typing', {
@@ -109,7 +100,6 @@ module.exports = function initSocket(io) {
       });
     });
 
-    // 4. Создание голосования/опроса в реальном времени (Часть 3 ТЗ)
     socket.on('create_poll', async ({ room, question, options }, callback) => {
       try {
         const cleanOptions = (options || []).map((o) => o.trim()).filter(Boolean);
@@ -137,7 +127,6 @@ module.exports = function initSocket(io) {
       }
     });
 
-    // 5. Голосование в опросе в реальном времени
     socket.on('vote_poll', async ({ pollId, optionId }, callback) => {
       try {
         const poll = await Poll.findById(pollId);
@@ -145,7 +134,6 @@ module.exports = function initSocket(io) {
           return callback?.({ status: 'error', message: 'Опрос не найден' });
         }
 
-        // Снимаем предыдущий голос пользователя в этом опросе (чтобы можно было переголосовать)
         poll.options.forEach((opt) => {
           const idx = opt.voters.indexOf(socket.username);
           if (idx !== -1) {
@@ -164,7 +152,6 @@ module.exports = function initSocket(io) {
 
         await poll.save();
 
-        // Мгновенно обновляем результаты у всех в этой комнате
         io.to(poll.room).emit('poll_updated', poll);
         callback?.({ status: 'ok' });
       } catch (err) {
@@ -172,8 +159,7 @@ module.exports = function initSocket(io) {
         callback?.({ status: 'error', message: 'Ошибка голосования' });
       }
     });
-
-    // 6. Разрыв соединения (уведомление об отключении)
+    
     socket.on('disconnect', (reason) => {
       const user = onlineUsers.get(socket.id);
       if (user) {

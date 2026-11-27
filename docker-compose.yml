@@ -1,0 +1,40 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: asana_backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - PORT=3000
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    volumes:
+      - backend_logs:/app/logs
+    networks:
+      - asana_net
+
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: asana_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - asana_net
+
+volumes:
+  backend_logs:
+
+networks:
+  asana_net:
+    driver: bridge
